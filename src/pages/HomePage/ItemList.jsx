@@ -17,8 +17,73 @@ import { useRecoilState, useRecoilValue } from "recoil";
 import { modalState } from "../../store/atoms/model";
 import categoriesState from "../../store/atoms/categories";
 import itemsState from "../../store/atoms/items";
+import axios from "axios";
+import BASE_URL from "../../../config";
+
+function SortOrFilter({
+  categories,
+  isOpen,
+  onClose,
+  selectedIcon,
+  setCat,
+  setSortOption,
+}) {
+  const handleSort = (criteria) => {
+    setSortOption(criteria);
+  };
+  const handleFilter = (criteria) => {
+    setCat(Number(criteria));
+  };
+
+  const sortOptions = ["sku", "name"];
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute z-10 top-0 right-0 mb-12 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+      <div
+        className="py-1"
+        role="menu"
+        aria-orientation="vertical"
+        aria-labelledby="options-menu"
+      >
+        <span className="text-gray-700 w-full px-4 py-2 text-md font-bold">
+          Sort/Filter by
+        </span>
+        {selectedIcon === "sort"
+          ? sortOptions.map((option) => {
+              return (
+                <button
+                  key={option}
+                  className="text-gray-700 block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                  role="menuitem"
+                  value={option}
+                  onClick={(e) => handleSort(e.target.value)}
+                >
+                  {option}
+                </button>
+              );
+            })
+          : categories.map((category) => {
+              return (
+                <button
+                  key={category.id}
+                  className="text-gray-700 block w-full text-left px-4 py-2 text-sm hover:bg-gray-10"
+                  role="menuitem"
+                  value={category.id}
+                  onClick={(e) => handleFilter(e.target.value)}
+                >
+                  {category.category}
+                </button>
+              );
+            })}
+      </div>
+    </div>
+  );
+}
 
 const ItemList = () => {
+  const url = (path) => `${BASE_URL}${path}`;
   const [showList, setShowList] = useState(true);
   const [selectedItems, setSelectedItems] = useState([]);
   const [itemSelected, setItemSelected] = useState(false);
@@ -28,6 +93,12 @@ const ItemList = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [options, setOptions] = useState(["Update", "Delete"]);
+  const [showSortOrFilter, setShowSortOrFilter] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSortOption, setSelectedSortOption] = useState("");
+  const [sortField, setSortField] = useState(""); // 'SKU' or 'Name'
+
   const tagIcons = {
     1: <Cog6ToothIcon className="tag-icon" />,
     2: <WrenchScrewdriverIcon className="tag-icon" />,
@@ -43,6 +114,8 @@ const ItemList = () => {
   const toggleOptions = () => {
     setIsOptionsOpen((prev) => !prev);
   };
+
+  console.log("Selected Items: " + selectedItems);
 
   const handleSelectAllClick = (e) => {
     // handleCheckboxChange();
@@ -70,8 +143,41 @@ const ItemList = () => {
     return items.length > 0 && selectedItems.length === items.length;
   };
 
-  const handleUpdateItem = () => {};
-  const handleItemsDelete = () => {};
+  const handleUpdateItem = async () => {};
+  const handleItemsDelete = async () => {
+    if (selectedItems.length == 0) {
+      console.log("No items selected for deletion");
+      return;
+    }
+    try {
+      const itemIds = selectedItems.join(",");
+
+      const response =
+        selectedItems.length > 1
+          ? await axios.delete(url("/api/items/bulk-delete/"), {
+              data: { ids: selectedItems },
+              withCredentials: true,
+            })
+          : await axios.delete(url(`/api/items/${selectedItems}/`), {
+              withCredentials: true,
+            });
+
+      console.log(response.status);
+      if (response.status === 204) {
+        console.log("Item Deleted successfully");
+
+        const remainingItems = items.filter(
+          (item) => !selectedItems.includes(item.id)
+        );
+        setItems(remainingItems);
+
+        // Clear the selected items
+        setSelectedItems([]);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleOptionClick = (e) => {
     const { name } = e.target;
@@ -83,9 +189,33 @@ const ItemList = () => {
     }
   };
 
+  const handleSortSelection = (criteria) => {
+    setSortField(criteria);
+  };
+
+  const closeShowOrFilter = () => {
+    setShowSortOrFilter(false);
+  };
+
+  const handleSortOrFilter = (choice) => {
+    setSelectedIcon(choice);
+    setShowSortOrFilter(!showSortOrFilter);
+  };
+
   const getStockColor = (stock) => {
     if (stock < 1000) return "bg-red-600";
     else if (stock < 10000) return "bg-yellow-500";
+    else return "bg-lime-600";
+  };
+
+  const getAvailableStockColor = (in_stock, av_stock) => {
+    if (av_stock === 0) return "bg-red-600";
+
+    if (in_stock === av_stock) return getStockColor(in_stock);
+
+    let percent = (av_stock / in_stock) * 100;
+    if (percent < 40) return "bg-red-600";
+    else if (percent < 60) return "bg-yellow-500";
     else return "bg-lime-600";
   };
 
@@ -107,12 +237,35 @@ const ItemList = () => {
     const nameMatch = item.name.toLowerCase().includes(query);
     const skuMatch = item.sku.toLowerCase().includes(query);
 
-    return nameMatch || skuMatch;
+    const catId = Number(selectedCategory);
+    const catMatch = selectedCategory ? item.category === catId : true;
+
+    return (nameMatch || skuMatch) && catMatch;
   });
+
+  const getSortedItems = (items, sortField) => {
+    // Copy the array before sorting to avoid mutating the original array
+    return sortField
+      ? items.sort((a, b) => {
+          const itemA = a[sortField].toLowerCase();
+          const itemB = b[sortField].toLowerCase();
+
+          if (itemA < itemB) {
+            return -1;
+          }
+          if (itemA > itemB) {
+            return 1;
+          }
+          return 0;
+        })
+      : items;
+  };
+
+  const sortedItems = getSortedItems(filteredItems, sortField);
 
   function ItemListContentDetails() {
     return (
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="min-w-full leading-normal">
           <thead>
             <tr>
@@ -171,7 +324,8 @@ const ItemList = () => {
                 <td className="item-list">
                   <div className="flex justify-between ">
                     <div
-                      className={`w-3 h-3 rounded-full  ${getStockColor(
+                      className={`w-3 h-3 rounded-full  ${getAvailableStockColor(
+                        item.in_stock,
                         item.available_stock
                       )}`}
                     ></div>
@@ -182,6 +336,14 @@ const ItemList = () => {
             ))}
           </tbody>
         </table>
+        <SortOrFilter
+          categories={categories}
+          isOpen={showSortOrFilter}
+          onClose={closeShowOrFilter}
+          selectedIcon={selectedIcon}
+          setCat={setSelectedCategory}
+          setSortOption={handleSortSelection}
+        />
       </div>
     );
   }
@@ -229,7 +391,7 @@ const ItemList = () => {
 
                 {isOptionsOpen && itemSelected && (
                   <div
-                    className="origin-top-right absolute mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none"
+                    className="origin-top-right absolute z-10 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none"
                     role="menu"
                     aria-orientation="vertical"
                     aria-labelledby="options-menu"
@@ -249,19 +411,6 @@ const ItemList = () => {
                           </button>
                         );
                       })}
-                      {/* <button
-                        className="text-gray-700 block w-full text-left px-4 py-2 font-bold text-sm hover:bg-gray-100"
-                        role="menuitem"
-                      >
-                        Update
-                      </button>
-                      <button
-                        className="text-gray-700 block w-full text-left px-4 py-2 font-bold text-sm hover:bg-gray-100"
-                        role="menuitem"
-                      >
-                        Delete
-                      </button> */}
-                      {/* ... more options here */}
                     </div>
                   </div>
                 )}
@@ -280,8 +429,14 @@ const ItemList = () => {
                 <MagnifyingGlassIcon className=" absolute right-3 top-1/2 transform -translate-y-1/2 w-6 h-6" />
               </div>
               <div className="flex space-x-2">
-                <ChartBarIcon className="w-12 h-12" />
-                <FunnelIcon className="w-12 h-12" />
+                <ChartBarIcon
+                  className="w-12 h-12"
+                  onClick={() => handleSortOrFilter("sort")}
+                />
+                <FunnelIcon
+                  className="w-12 h-12"
+                  onClick={() => handleSortOrFilter("filter")}
+                />
               </div>
             </div>
           </div>

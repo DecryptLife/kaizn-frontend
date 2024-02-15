@@ -4,6 +4,9 @@ import { useCallback, useState } from "react";
 import PasswordStrength from "./PasswordStrength";
 import axios from "axios";
 import BASE_URL from "../../../config";
+import LoadingScreen from "../LoadingScreen";
+import { useRecoilState } from "recoil";
+import loadingState from "../../store/atoms/loading";
 
 export function Header() {
   return (
@@ -29,10 +32,12 @@ const Login = () => {
     password: "",
   });
 
+  const [loading, setLoading] = useRecoilState(loadingState);
+
   const handleInputChange = useCallback(
     (e) => {
       const { id, value } = e.target;
-      console.log(id, value);
+
       setLoginDetails((prev) => ({
         ...prev,
         [id]: value,
@@ -40,17 +45,19 @@ const Login = () => {
     },
     [loginDetails]
   );
+  // if (loading) {
+  //   return <LoadingScreen isLoading={loading}/>; // Customize as needed
+  // }
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
-    console.log("Login clicked");
     const payload = {
       username: loginDetails.username,
       password: loginDetails.password,
     };
-
-    console.log(payload);
 
     try {
       const response = await axios.post(url("/api/login/"), payload, {
@@ -59,14 +66,14 @@ const Login = () => {
         },
       });
 
-      console.log(response.data);
       const data = response.data;
 
       localStorage.setItem("token", data.token);
       navigate("/home");
     } catch (error) {
-      console.log(error);
       setError("Invalid credentials");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -75,58 +82,62 @@ const Login = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center mt-16">
-      {/* header */}
-      <Header />
-      {/* form */}
-      <div className="flex mt-8 w-1/2">
-        <form onSubmit={handleLogin} className="shared-form-style">
-          <div>
-            <input
-              id="username"
-              type="text"
-              placeholder="username"
-              className="login-input"
-              value={loginDetails.username}
-              onChange={handleInputChange}
-              required
-            />
-          </div>
+    <div>
+      <LoadingScreen />
+      <div className="flex flex-col items-center justify-center mt-16">
+        {/* header */}
+        <Header />
+        {/* form */}
+        <div className="flex mt-8 w-1/2">
+          <form onSubmit={handleLogin} className="shared-form-style">
+            <div>
+              <input
+                id="username"
+                type="text"
+                placeholder="username"
+                className="login-input"
+                value={loginDetails.username}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
 
-          <div>
-            <input
-              id="password"
-              type="password"
-              placeholder="password"
-              className="login-input"
-              value={loginDetails.password}
-              onChange={handleInputChange}
-              required
-            />
-            {loginDetails.password && (
-              <PasswordStrength password={loginDetails.password} />
+            <div>
+              <input
+                id="password"
+                type="password"
+                placeholder="password"
+                className="login-input"
+                value={loginDetails.password}
+                onChange={handleInputChange}
+                required
+              />
+              {loginDetails.password && (
+                <PasswordStrength password={loginDetails.password} />
+              )}
+            </div>
+            {error && (
+              <div className="flex justify-center text-red-600">{error}</div>
             )}
-          </div>
+            <div className="flex justify-between">
+              <button className="login-buttons" onClick={handleRegistration}>
+                CREATE ACCOUNT
+              </button>
+              <input
+                type="submit"
+                className="login-buttons"
+                name="login"
+                value="LOG IN"
+              />
+            </div>
 
-          <div className="flex justify-between">
-            <button className="login-buttons" onClick={handleRegistration}>
-              CREATE ACCOUNT
-            </button>
-            <input
-              type="submit"
-              className="login-buttons"
-              name="login"
-              value="LOG IN"
-            />
-          </div>
-
-          {error && <div>{error}</div>}
-          <div>
-            <a className="underlined" href="/">
-              Forgot Password
-            </a>
-          </div>
-        </form>
+            {/* <div>
+              <a className="underlined" href="/">
+                Forgot Password
+              </a>
+            </div> */}
+          </form>
+        </div>
       </div>
     </div>
   );

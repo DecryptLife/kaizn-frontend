@@ -5,17 +5,23 @@ import axios from "axios";
 import Select from "react-select";
 import tagState from "../../store/atoms/tags";
 import categoriesState from "../../store/atoms/categories";
-
+import BASE_URL from "../../../config";
+import itemsState from "../../store/atoms/items";
 const AddItemWindow = () => {
+  const url = (path) => `${BASE_URL}${path}`;
+
   const setModalState = useSetRecoilState(modalState);
   const [tags, setTags] = useRecoilState(tagState);
   const [selectedTags, setSelectedTags] = useState([]);
+  const setItems = useSetRecoilState(itemsState);
   const [categories, setCategories] = useRecoilState(categoriesState);
   const [formData, setFormData] = useState({
     sku: "",
     email: "",
     category: "",
     tags: [],
+    in_stock: 0,
+    available_stock: 0,
     // ... add more fields as necessary
   });
 
@@ -54,11 +60,32 @@ const AddItemWindow = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     // Here you would handle the submission of the data to your database
-    console.log(formData);
-    setModalState(false); // Close the modal after submit
+
+    const payload = {
+      sku: formData.sku,
+      name: formData.name,
+      category: formData.category,
+      tags: formData.tags,
+      in_stock: formData.in_stock,
+      available_stock: formData.available_stock,
+    };
+    try {
+      const response = await axios.post(url("/api/items/"), payload, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        withCredentials: true,
+      });
+
+      console.log(response.data);
+      setItems((oldItems) => [...oldItems, response.data]);
+      setModalState(false); // Close the modal after submit
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
@@ -83,7 +110,7 @@ const AddItemWindow = () => {
           <input
             type="text"
             name="name"
-            value={formData.email}
+            value={formData.name}
             onChange={handleInputChange}
             placeholder="Name"
             className="block w-full p-2 border rounded mb-3"
@@ -128,10 +155,19 @@ const AddItemWindow = () => {
 
           <input
             type="text"
-            name="category"
-            value={formData.email}
+            name="in_stock"
+            value={formData.in_stock}
             onChange={handleInputChange}
             placeholder="In Stock"
+            className="block w-full p-2 border rounded mb-3"
+          />
+
+          <input
+            type="text"
+            name="available_stock"
+            value={formData.available_stock}
+            onChange={handleInputChange}
+            placeholder="Available Stock"
             className="block w-full p-2 border rounded mb-3"
           />
 
