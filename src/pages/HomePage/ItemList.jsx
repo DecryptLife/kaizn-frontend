@@ -143,15 +143,15 @@ const ItemList = () => {
     return items.length > 0 && selectedItems.length === items.length;
   };
 
-  const handleUpdateItem = async () => {};
+  const handleUpdateItem = async () => {
+    setIsModalOpen(true);
+  };
   const handleItemsDelete = async () => {
     if (selectedItems.length == 0) {
       console.log("No items selected for deletion");
       return;
     }
     try {
-      const itemIds = selectedItems.join(",");
-
       const response =
         selectedItems.length > 1
           ? await axios.delete(url("/api/items/bulk-delete/"), {
@@ -444,7 +444,12 @@ const ItemList = () => {
           <ItemListContentDetails />
         </div>
       )}
-      {isModalOpen && <AddItemWindow />}
+      {isModalOpen && (
+        <AddItemWindow
+          selectedItem={selectedItems}
+          setSelected={setSelectedItems}
+        />
+      )}
     </div>
   );
 };

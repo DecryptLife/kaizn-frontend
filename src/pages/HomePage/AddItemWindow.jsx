@@ -7,17 +7,19 @@ import tagState from "../../store/atoms/tags";
 import categoriesState from "../../store/atoms/categories";
 import BASE_URL from "../../../config";
 import itemsState from "../../store/atoms/items";
-const AddItemWindow = () => {
+const AddItemWindow = ({ selectedItem, setSelected }) => {
   const url = (path) => `${BASE_URL}${path}`;
 
   const setModalState = useSetRecoilState(modalState);
   const [tags, setTags] = useRecoilState(tagState);
   const [selectedTags, setSelectedTags] = useState([]);
-  const setItems = useSetRecoilState(itemsState);
+  const [items, setItems] = useRecoilState(itemsState);
+  const [buttonState, setButtonState] = useState("ADD ITEM");
   const [categories, setCategories] = useRecoilState(categoriesState);
+  const [stockError, setStockError] = useState(false);
   const [formData, setFormData] = useState({
     sku: "",
-    email: "",
+    name: "",
     category: "",
     tags: [],
     in_stock: 0,
@@ -60,6 +62,27 @@ const AddItemWindow = () => {
     }));
   };
 
+  const handleModalClose = () => {
+    setFormData({
+      sku: "",
+      name: "",
+      category: "",
+      tags: [],
+      in_stock: 0,
+      available_stock: 0,
+    });
+    console.log("empty form data");
+    setSelected([]);
+    setModalState(false);
+  };
+
+  useEffect(() => {
+    if (formData.in_stock < formData.available_stock) {
+      setStockError(true);
+    } else {
+      setStockError(false);
+    }
+  }, [formData.available_stock, formData.in_stock]);
   const handleSubmit = async (e) => {
     e.preventDefault();
     // Here you would handle the submission of the data to your database
@@ -72,28 +95,81 @@ const AddItemWindow = () => {
       in_stock: formData.in_stock,
       available_stock: formData.available_stock,
     };
-    try {
-      const response = await axios.post(url("/api/items/"), payload, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        withCredentials: true,
-      });
 
-      console.log(response.data);
-      setItems((oldItems) => [...oldItems, response.data]);
-      setModalState(false); // Close the modal after submit
-    } catch (err) {
-      console.error(err);
+    if (buttonState === "ADD ITEM") {
+      try {
+        const response = await axios.post(url("/api/items/"), payload, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+        });
+
+        console.log(response.data);
+        setItems((oldItems) => [...oldItems, response.data]);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setModalState(false);
+        setSelected([]);
+      }
+    } else {
+      try {
+        const response = await axios.put(
+          url(`/api/items/${selectedItem}/`),
+          payload,
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+            withCredentials: true,
+          }
+        );
+
+        console.log(response.data);
+
+        const updatedItems = items.map((item) =>
+          item.id === selectedItem[0] ? response.data : item
+        );
+        console.log(updatedItems);
+        setItems(updatedItems);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setModalState(false); // Close the modal after submit
+        setButtonState("ADD ITEM");
+        setSelected([]);
+      }
     }
   };
+
+  useEffect(() => {
+    if (selectedItem.length === 1) {
+      console.log(selectedItem);
+      console.log(items);
+      setButtonState("UPDATE");
+      const item = items.find((item) => item.id === selectedItem[0]);
+      console.log(item);
+
+      setFormData({
+        sku: item.sku,
+        name: item.name,
+        category: item.category,
+        tags: item.tags,
+        in_stock: item.in_stock,
+        available_stock: item.available_stock,
+      });
+
+      setSelectedTags(item.tags);
+    }
+  }, [selectedItem]);
 
   useEffect(() => {
     console.log("Updated: ", formData);
   }, [formData]);
 
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+    <div className="fixed z-40 inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
       <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <h3 className="text-lg text-center font-bold mb-4">
           ENTER ITEM DETAILS
@@ -115,21 +191,6 @@ const AddItemWindow = () => {
             placeholder="Name"
             className="block w-full p-2 border rounded mb-3"
           />
-
-          {/* <select
-            multiple
-            name="tags"
-            value={selectedTags}
-            onChange={handleTagChange}
-            placeholder="Tags"
-            className="form-multiselect block w-full p-2 border rounded mb-3 mt-1"
-          >
-            {tags.map((tag) => (
-              <option id={tag.id} key={tag.id} value={tag.id}>
-                {tag.tag}
-              </option>
-            ))}
-          </select> */}
 
           <Select
             isMulti
@@ -171,17 +232,23 @@ const AddItemWindow = () => {
             className="block w-full p-2 border rounded mb-3"
           />
 
+          {stockError && (
+            <div className="flex justify-center text-sm mb-2 text-red-600">
+              Available can't be more
+            </div>
+          )}
+
           {/* Add more input fields as needed */}
           <div className="text-center">
             <button
               type="submit"
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-blue-700"
             >
-              ADD ITEM
+              {buttonState}
             </button>
             <button
               type="button"
-              onClick={() => setModalState(false)}
+              onClick={handleModalClose}
               className="px-4 py-2 ml-2 bg-red-500 text-white rounded hover:bg-red-700"
             >
               CANCEL
